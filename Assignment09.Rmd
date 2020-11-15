@@ -102,54 +102,71 @@ $$
 S(T) = S(0)\exp\{(r-\frac{1}{2}\sigma^2)T+ \sigma W(T)\}
 $$
 where $W(T) = \sqrt{T}Z$ and $Z \sim N(0,1)$.
-Function `St` is given below to sample the path of $S(t)$.
+Function `St_path` is given below to sample the path of $S(t)$.
 ```{r}
 s0 <- 1
 r <- 0.05
 n <- 12
 
-St <- function(t,sigma){
+
+St_path <- function(s0 = 1, n = 12, t, sigma){
+  t_path <- seq(0, t, length.out = n)
+  delta <- t/n
   z <- rnorm(1, mean = 0, sd = 1)
-  exp((0.05 - sigma^2/2)*t + sigma*sqrt(t)*z)
+  St_path <- vector()
+  St_path[1] <- s0 * exp((0.05 - sigma^2/2)*delta + sigma*sqrt(delta)*z)
+  for (i in 2:n) {
+    z <- rnorm(1, mean = 0, sd = 1)
+    St_path[i] <- St_path[i-1] * exp((0.05 - sigma^2/2)*delta + sigma*sqrt(delta)*z)
+  }
+  return(St_path)
 }
-St_rep <- function(nrep, t, sigma){
-  replicate(nrep,St(t, sigma))
-}
+
 ```
 
 ## (b)
 
+Use the following functions to calculate $S(T), P_A, P_E, P_G$ and their correlation coefficients.
 ```{r}
-PA <- function(t, sigma, K){
-  iT <- seq(0, t, length.out = n)
-  SA <- mean(St(iT, sigma))
-  SA_p <- ifelse(SA - K > 0, SA - K ,0)
-  exp(-0.05*t)*SA_p
-}
-PA_rep <- function(nrep, t, sigma, K){
-  replicate(nrep,PA(t, sigma, K))
+ST <- function(St){St[length(St)]}
+
+PA <- function(St, t, K){
+  SA <- mean(St)
+  exp(- .05 * t) * ifelse(SA-K > 0, SA-K, 0)
 }
 
-PE <- function(t, sigma, K){
-  St <- St(t, sigma)
-  SE_p <- ifelse(St - K > 0, St - K, 0)
-  exp(-0.05*t)*SE_p
-}
-PE_rep <- function(nrep, t, sigma, K){
-  replicate(nrep,PE(t, sigma, K))
+
+PE <- function(St,t, K){
+  ST <- St[12]
+  exp(- .05 * t) * ifelse(ST-K > 0, ST-K, 0)
 }
 
-PG <- function(t, sigma, K){
-  iT <- seq(0, t, length.out = n)
-  SG <- exp(sum(log( St(iT, sigma) )))
-  SG_p <- ifelse(SG - K > 0, SG - K, 0)
-  exp(-0.05*t)*SG_p
+PG <- function(St, t, K){
+  SG <- exp(mean(log(St)))
+  exp(- .05 * t) * ifelse(SG-K > 0, SG-K, 0)
 }
-PG_rep <- function(nrep, t, sigma, K){
-  replicate(nrep,PG(t, sigma, K))
+
+mysummary <- function(s0 = 1, n = 12, t, sigma, K){
+  St <- St_path(s0 = s0, n = n, t = t, sigma = sigma)
+  c("ST" = ST(St),
+    "PA" = PA(St, t, K),
+    "PE" = PE(St, t, K),
+    "PE" = PG(St, t, K))
+}
+
+summaryall <- function(nrep, s0 = 1, n = 12, t, sigma, K){
+  sim <- replicate(nrep,
+                   mysummary(s0 = s0, n = n, t = t,
+                              sigma = sigma, K = K))
+  cor_PA_ST <- cor(sim[1,],sim[2,])
+  cor_PA_PE <- cor(sim[3,],sim[2,])
+  cor_PA_PG <- cor(sim[4,],sim[2,])
+  return(c(cor_PA_ST, cor_PA_PE, cor_PA_PG))
 }
 
 ```
+
+Then we calculate correlation coefficients between $S(T),\ P_A,\ P_E,\ P_G$.
 
 ```{r}
 nrep = 5000
@@ -157,40 +174,22 @@ sigma = 0.5
 t = 1
 K = c(1.1, 1.2, 1.3, 1.4, 1.5)
 
-co_PA_St <- sapply(K, 
-                   function(K){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     S_t <- replicate(nrep, St(t=t, sigma= sigma))
-                     cor(P_A,S_t)
-                   }
-)
-plot(K, co_PA_St, type = "l"
-     , ylab = "correlation coefficient", xlab = "K",
-     main = "PA and S(T)")
-
-co_PA_PE <- sapply(K, 
-                   function(K){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     P_E <- PE_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     cor(P_A,P_E)
-                   }
-)
-plot(K, co_PA_PE, type = "l"
-     , ylab = "correlation coefficient", xlab = "K",
-     main = "PA and PE")
-
-co_PA_PG <- sapply(K, 
-                   function(K){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     P_G <- PG_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     cor(P_A,P_G)
-                   }
-)
-plot(K, co_PA_PG, type = "l"
-     , ylab = "correlation coefficient", xlab = "K",
-     main = "PA and PG")
+cor_K <- sapply(K, function(K){
+  summaryall(nrep, s0 = 1, n = 12, t, sigma, K)
+})
 
 ```
+Plot the coefficients.
+```{r}
+plot(K, cor_K[1,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and S(T)")
+plot(K, cor_K[2,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and PE")
+plot(K, cor_K[3,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and PG")
+```
+
+The correlation coefficients decrease with K increasing.
 
 ## (c)
 
@@ -200,41 +199,20 @@ K <- 1.5
 sigma <- c(2:5)/10
 nrep <- 5000
 
-co_PA_St <- sapply(sigma, 
-                   function(sigma){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     S_t <- replicate(nrep, St(t=t, sigma= sigma))
-                     cor(P_A,S_t)
-                   }
-)
-plot(sigma, co_PA_St, type = "l"
-     , ylab = "correlation coefficient", xlab = "sigma",
-     main = "PA and S(T)")
+cor_sigma <- sapply(sigma, function(sigma){
+  summaryall(nrep, s0 = 1, n = 12, t, sigma, K)
+})
 
-co_PA_PE <- sapply(sigma, 
-                   function(sigma){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     P_E <- PE_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     cor(P_A,P_E)
-                   }
-)
-plot(sigma, co_PA_PE, type = "l"
-     , ylab = "correlation coefficient", xlab = "sigma",
-     main = "PA and PE")
-
-co_PA_PG <- sapply(sigma, 
-                   function(sigma){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     P_G <- PG_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     cor(P_A,P_G)
-                   }
-)
-plot(sigma, co_PA_PG, type = "l"
-     , ylab = "correlation coefficient", xlab = "sigma",
-     main = "PA and PG")
-
+plot(sigma, cor_sigma[1,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and S(T)")
+plot(sigma, cor_sigma[2,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and PE")
+plot(sigma, cor_sigma[3,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and PG")
 
 ```
+
+The correlation coefficients increase with $\sigma$ increasing.
 
 ## (d)
 
@@ -244,64 +222,49 @@ K <- 1.5
 sigma <- 0.5
 nrep <- 5000
 
-co_PA_St <- sapply(t, 
-                   function(t){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     S_t <- replicate(nrep, St(t=t, sigma= sigma))
-                     cor(P_A,S_t)
-                   }
-)
-plot(t, co_PA_St, type = "l"
-     , ylab = "correlation coefficient", xlab = "T",
-     main = "PA and S(T)")
+set.seed(100)
+cor_t <- sapply(t, function(t){
+  summaryall(nrep, s0 = 1, n = 12, t, sigma, K)
+})
 
-co_PA_PE <- sapply(t, 
-                   function(t){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     P_E <- PE_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     cor(P_A,P_E)
-                   }
-)
-plot(t, co_PA_PE, type = "l"
-     , ylab = "correlation coefficient", xlab = "T",
-     main = "PA and PE")
-
-co_PA_PG <- sapply(t, 
-                   function(t){
-                     P_A <- PA_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     P_G <- PG_rep(nrep = nrep, t = t, sigma = sigma, K = K)
-                     cor(P_A,P_G)
-                   }
-)
-plot(t, co_PA_PG, type = "l"
-     , ylab = "correlation coefficient", xlab = "T",
-     main = "PA and PG")
+plot(t, cor_t[1,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and S(T)")
+plot(t, cor_t[2,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and PE")
+plot(t, cor_t[3,], type = 'l', ylab = "Correlation coefficient",
+     main = "Correlation coefficient between PA and PG")
 
 ```
+The correlation coefficients increase with T increasing.
+
 
 ## (e)
 
 ```{r}
+s0 <-1
+n <- 12
 sigma <- 0.4
 t <- 1
 K <- 1.5
 
-P_A <- PA_rep(nrep = 1000, t = t, sigma = sigma, K = K)
+P_A <- replicate(nrep,
+                 mysummary(s0 = s0, n = n, t = t,
+                           sigma = sigma, K = K))[2,]
+# use as ture theta
+PG_true <- replicate(nrep,
+                     mysummary(s0 = s0, n = 100, t = t,
+                               sigma = sigma, K = K))[4,]
 
-PA_control <- function(nrep, t, sigma, K, P_A){
-  theta <- PG_rep(nrep = nrep, t = t, sigma = sigma, K = K)
+PA_control <- function(nrep, t, sigma, K, P_A, theta_true){
+  theta <- replicate(nrep,
+                     mysummary(s0 = s0, n = n, t = t,
+                               sigma = sigma, K = K))[4,]
   theta_h <- mean(theta)
-  theta_true <- PG(t = t, sigma = sigma, K = K)
-  b <- cov(P_A,theta)/var(theta)
+  b <- cov(P_A, theta)/var(theta)
   mean(P_A) - b * (theta_h - theta_true)
 }
 
-PA_control_rep <- function(nrep1, nrep2, t, sigma, K, P_A){
-  replicate(nrep1, PA_control(nrep = nrep2, t=t, sigma = sigma
-                              , K = K, P_A = P_A ))
-}
-
-P_A_control <- PA_control_rep(1000, 1000, t, sigma, K, P_A )
+P_A_control <- PA_control(nrep = 5000, t, sigma, K, P_A, PG_true)
 
 data.frame("SD without control" = sd(P_A),
            "SD with contorl" = sd(P_A_control))
