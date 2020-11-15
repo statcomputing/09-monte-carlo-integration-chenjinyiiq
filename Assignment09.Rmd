@@ -13,7 +13,7 @@ Consider $g(x)$ has the density fucntion
 $$g(x) =\frac{1}{\sqrt{2\pi}} e^{-\frac{(x-2)^2}{2}}$$.
 ```{r}
 h <- function(x) {x^2}
-df <- function(x) {(x^2) * exp((-(x-2)^2)/2) / (5*sqrt(2*pi))}
+df <- function(x) {(x^2 * exp(-((x-2)^2)/2))/(5*sqrt(2*pi))}
 
 g <- function(x) {dnorm(x)}
 rg <- function(n) {rnorm(n)}
@@ -53,30 +53,23 @@ E^{N(2,1)}(X^4)=E^{N(0,1)}[(Z+2)^4]=E(Z^4)+4E(Z^3)+6E(Z^2)+4E(Z)+16=3+0+6+0+16=2
 $$
 We have 
 $$g(x) = \frac{1}{25\sqrt{2\pi}} x^4 \exp(-\frac{(x-2)^2}{2}).$$
-Since $2x-5 \leq (x-2)^2$, we can write $\exp(-\frac{(x-2)^2}{2}) \leq \exp(-\frac{2x-5}{2})$ and $g(x) \leq x^4\exp(-x)$. This inequality suggests we can use rejection sampling method with $Gamma(5,1)$ to generate a sample depend on $g(x)$.
+Since $2x-5 \leq (x-2)^2$, we can write $\exp(-\frac{(x-2)^2}{2}) \leq \exp(-\frac{2x-5}{2})$ and $g(x) \leq x^4\exp(-x)$. This inequality suggests we can use rejection sampling method with $Gamma(5,2)$ to generate a sample depend on $g(x)$.
 
 
 ```{r}
-# density function of g(x)
-dg <- function(x) x^4 * exp(-((x-2)^2)/2) / 25*sqrt(2 * pi)
-# Rejection sampling method to generate random variable with g(x) as the pdf
-rej_sam <- function(shape, scale){
-  while(TRUE){
-    x <- rgamma(1, shape = shape, scale = scale)
-    u <- runif(1)
-    if (u <= exp(-(x-2)^2)/exp(-2*x+5)) {
-      return(x)
-      break
-      }
-    }
-  }
-rg <- function(n){replicate(n, rej_sam(shape = 5, scale = 1))}
+g1 <- function(x){
+  dgamma(x, shape = 5, scale = 2)
+}
+rg1 <- function(n){
+  rgamma(n, shape = 5, scale = 2)
+}
+
 
 # Importance sampling function
 
 isAppr <- function(n, h, df, g, rg){
   x <- rg(n)
-  mean(h(x) * df(x)/g(x))
+  mean(h(x) * df(x) / g(x))
 }
 
 mysummary <- function(nrep, n, h, df, g, rg){
@@ -89,13 +82,16 @@ mysummary <- function(nrep, n, h, df, g, rg){
 ## (c)
 
 ```{r}
-mysummary(100,1000, h, df, g, rg)
-mysummary(100,10000, h, df, g, rg)
-mysummary(100,50000, h, df, g, rg)
+mysummary(100,1000, h, df, g1, rg1)
+mysummary(100,10000, h, df, g1, rg1)
+mysummary(100,50000, h, df, g1, rg1)
 ```
 
 ## (d)
 The variances of the second method are closer to 0 comparing with those of first method. 
+
+
+
 
 # Exercis 7.5.2
 
